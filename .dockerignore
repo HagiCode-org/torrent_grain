@@ -1,0 +1,13 @@
+.git
+.github
+.data
+.data-*
+coverage
+dist
+node_modules
+npm-debug.log*
+tests
+ui-dist
+vitest.config.d.ts
+vitest.config.js
+vitest.config.js.map
