@@ -36,6 +36,13 @@ npm run build
 npm run start
 ```
 
+Quick container smoke check:
+
+```bash
+cd repos/torrent_grain
+npm run test:docker:smoke
+```
+
 After `npm run start`, open:
 
 - `http://127.0.0.1:32101/` - React dashboard
@@ -211,22 +218,36 @@ The dashboard focuses on:
 
 ## Docker
 
-Build the image:
+Build the production image:
 
 ```bash
 cd repos/torrent_grain
-docker build -t torrent-grain .
+docker build -t torrent-grain:local .
 ```
 
-Run it with a persistent volume:
+Run it with a persistent volume mounted to `/data`:
 
 ```bash
 docker run --rm \
   -p 32101:32101 \
   -e TORRENT_GRAIN_DATA_DIR=/data \
   -v $(pwd)/.data:/data \
-  torrent-grain
+  torrent-grain:local
 ```
+
+Validate the health probe:
+
+```bash
+curl http://127.0.0.1:32101/health
+```
+
+The production image contract is:
+
+- container port `32101`
+- persistent data mount `/data`
+- `TORRENT_GRAIN_DATA_DIR=/data` as the documented container default
+- `GET /health` as the readiness/liveness probe target
+- runtime entrypoint `node dist/index.js`
 
 The container startup path is automatic:
 
@@ -236,6 +257,86 @@ The container startup path is automatic:
 4. run an immediate scan
 5. continue background monitoring
 6. serve the built dashboard at `/`
+
+## Container release workflows
+
+Torrent Grain ships two independent registry workflows:
+
+- DockerHub: `.github/workflows/docker-build-dockerhub.yml`
+- Aliyun ACR: `.github/workflows/docker-build-aliyun-acr.yml`
+
+Both workflows support:
+
+- tag push release
+- `workflow_dispatch`
+- `repository_dispatch`
+- platform selector: `all`, `linux-amd64`, `linux-arm64`
+- local smoke verification before push:
+  - image builds successfully
+  - container starts successfully
+  - `/health` responds successfully
+
+Release drafting is handled separately:
+
+- `.github/workflows/release-drafter.yml` refreshes the GitHub draft release on `main` pushes and PR updates
+- `.github/release-drafter.yml` resolves the next `v*` draft version from PR labels
+- the release draft updates notes only; Docker publish still happens on version tag push
+
+### Image naming assumptions
+
+- DockerHub image: `docker.io/newbe36524/torrent-grain`
+- Aliyun ACR image: `<ALIYUN_ACR_REGISTRY>/<ALIYUN_ACR_NAMESPACE>/torrent-grain`
+
+If your namespace differs, override it through repository secrets without changing the workflow file.
+
+### Version tag rules
+
+Stable versions such as `1.2.3` publish:
+
+- `1.2.3`
+- `1.2`
+- `1`
+- `latest`
+
+Pre-release versions such as `1.2.3-rc.1` publish only:
+
+- `1.2.3-rc.1`
+
+`latest` is never updated by a pre-release build.
+
+### Required secrets
+
+DockerHub workflow:
+
+| Secret | Required | Description |
+| --- | --- | --- |
+| `DOCKERHUB_USERNAME` or `DOCKER_USERNAME` | yes | DockerHub login user |
+| `DOCKERHUB_TOKEN` or `DOCKER_PASSWORD` | yes | DockerHub access token |
+| `DOCKERHUB_NAMESPACE` | no | Image namespace, defaults to login user and falls back to `newbe36524` |
+
+Aliyun ACR workflow:
+
+| Secret | Required | Description |
+| --- | --- | --- |
+| `ALIYUN_ACR_REGISTRY` | yes | Registry endpoint, for example `registry.cn-hangzhou.aliyuncs.com` |
+| `ALIYUN_ACR_NAMESPACE` | yes | Target namespace / repository group |
+| `ALIYUN_ACR_USERNAME` | yes | Registry login user |
+| `ALIYUN_ACR_PASSWORD` | yes | Registry login password or token |
+
+### Manual trigger examples
+
+Build all platforms for the package version declared in `package.json`:
+
+- open the workflow in GitHub Actions
+- leave `version` empty
+- keep `platform=all`
+
+Rebuild only `linux/arm64` for a specific release:
+
+- set `version=1.2.3`
+- set `platform=linux-arm64`
+
+For automation, `repository_dispatch` may send `client_payload.version` and `client_payload.platform`, and the workflows resolve tags with the same rules as tag-triggered releases.
 
 ## Known assumptions
 
