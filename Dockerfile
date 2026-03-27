@@ -1,4 +1,6 @@
-FROM node:20-alpine AS base
+ARG NODE_IMAGE=node:24
+
+FROM ${NODE_IMAGE} AS base
 WORKDIR /app
 
 FROM base AS build
@@ -14,7 +16,7 @@ FROM base AS production-deps
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-FROM node:20-alpine AS runtime
+FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     TORRENT_GRAIN_HOST=0.0.0.0 \
