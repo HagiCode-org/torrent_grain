@@ -36,13 +36,6 @@ npm run build
 npm run start
 ```
 
-Quick container smoke check:
-
-```bash
-cd repos/torrent_grain
-npm run test:docker:smoke
-```
-
 After `npm run start`, open:
 
 - `http://127.0.0.1:32101/` - React dashboard
@@ -271,10 +264,6 @@ Both workflows support:
 - `workflow_dispatch`
 - `repository_dispatch`
 - platform selector: `all`, `linux-amd64`, `linux-arm64`
-- local smoke verification before push:
-  - image builds successfully
-  - container starts successfully
-  - `/health` responds successfully
 
 Release drafting is handled separately:
 
