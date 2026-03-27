@@ -1,0 +1,45 @@
+{
+  "name": "torrent_grain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Persistent P2P cache node for HagiCode release artifacts.",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "npm run dev:server",
+    "dev:server": "tsx watch src/index.ts",
+    "dev:ui": "vite --host 0.0.0.0",
+    "dev:all": "concurrently -k -n server,ui \"npm run dev:server\" \"npm run dev:ui\"",
+    "dev:peer:1": "node scripts/run-peer.mjs 1",
+    "dev:peer:2": "node scripts/run-peer.mjs 2",
+    "dev:peer:demo": "node scripts/dev-peer-demo.mjs",
+    "dev:peer:reset": "node scripts/dev-peer-reset.mjs",
+    "start": "node dist/index.js",
+    "build": "npm run build:server && npm run build:ui",
+    "build:server": "tsc -p tsconfig.json",
+    "build:ui": "vite build",
+    "preview:ui": "vite preview --host 0.0.0.0",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "semver": "^7.7.2",
+    "webtorrent": "^2.8.4",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "@types/semver": "^7.7.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^9.2.1",
+    "vite": "^7.2.0"
+  }
+}
