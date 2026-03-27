@@ -7,6 +7,17 @@ const imageTag = process.argv[2] ?? 'torrent-grain:smoke';
 const repoRoot = process.cwd();
 let containerId = '';
 let tempDir = '';
+const smokeSources = JSON.stringify([
+  {
+    id: 'smoke-disabled',
+    kind: 'server',
+    label: 'Smoke Disabled Source',
+    indexUrl: 'http://127.0.0.1/unused',
+    enabled: false,
+    latestPerGroup: 1,
+    pinnedVersions: [],
+  },
+]);
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -77,9 +88,10 @@ try {
   containerId = capture('docker', [
     'run',
     '--detach',
-    '--rm',
     '--env',
     'TORRENT_GRAIN_DATA_DIR=/data',
+    '--env',
+    `TORRENT_GRAIN_SOURCES=${smokeSources}`,
     '--volume',
     `${tempDir}:/data`,
     '--publish',
