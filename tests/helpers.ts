@@ -52,6 +52,10 @@ export class FakeTransferAdapter implements TransferAdapter {
     private readonly payloads: Record<string, string>,
     private readonly mode: 'downloading' | 'fallback' = 'fallback',
     private readonly seedingProgress?: Pick<TransferProgress, 'downloadRate' | 'uploadRate' | 'peerCount'>,
+    private readonly options: {
+      downloadProgress?: Array<Partial<TransferProgress>>;
+      seedingProgress?: Array<Partial<TransferProgress>>;
+    } = {},
   ) {}
 
   async download(request: TransferRequest, onProgress: (progress: TransferProgress) => void) {
@@ -63,14 +67,17 @@ export class FakeTransferAdapter implements TransferAdapter {
     const outputPath = path.join(request.tempDir, request.fileName);
     await fs.mkdir(path.dirname(outputPath), { recursive: true });
     await fs.writeFile(outputPath, payload, 'utf8');
-    onProgress({
+    const defaultProgress: TransferProgress = {
       mode: this.mode,
       bytesDone: Buffer.byteLength(payload),
       bytesTotal: Buffer.byteLength(payload),
+      downloadedBytes: Buffer.byteLength(payload),
+      uploadedBytes: 0,
       downloadRate: Buffer.byteLength(payload),
       uploadRate: 0,
       peerCount: this.mode === 'downloading' ? 2 : 0,
-    });
+    };
+    this.emitProgressSequence(onProgress, defaultProgress, this.options.downloadProgress);
     return {
       tempFilePath: outputPath,
       usedFallback: this.mode === 'fallback',
@@ -79,15 +86,18 @@ export class FakeTransferAdapter implements TransferAdapter {
 
   async ensureSeeding(request: { targetId: string; onProgress?: (progress: TransferProgress) => void }) {
     this.ensuredSeeds.push(request.targetId);
-    if (this.seedingProgress && request.onProgress) {
-      request.onProgress({
+    if (request.onProgress && (this.seedingProgress || this.options.seedingProgress?.length)) {
+      const defaultProgress: TransferProgress = {
         mode: 'shared',
         bytesDone: 0,
         bytesTotal: 0,
-        downloadRate: this.seedingProgress.downloadRate,
-        uploadRate: this.seedingProgress.uploadRate,
-        peerCount: this.seedingProgress.peerCount,
-      });
+        downloadedBytes: 0,
+        uploadedBytes: 0,
+        downloadRate: this.seedingProgress?.downloadRate ?? 0,
+        uploadRate: this.seedingProgress?.uploadRate ?? 0,
+        peerCount: this.seedingProgress?.peerCount ?? 0,
+      };
+      this.emitProgressSequence(request.onProgress, defaultProgress, this.options.seedingProgress);
     }
   }
 
@@ -97,5 +107,18 @@ export class FakeTransferAdapter implements TransferAdapter {
 
   async stopAll() {
     return;
+  }
+
+  private emitProgressSequence(
+    onProgress: (progress: TransferProgress) => void,
+    defaults: TransferProgress,
+    overrides?: Array<Partial<TransferProgress>>,
+  ) {
+    const sequence = overrides && overrides.length > 0
+      ? overrides.map((item) => ({ ...defaults, ...item }))
+      : [defaults];
+    for (const progress of sequence) {
+      onProgress(progress);
+    }
   }
 }

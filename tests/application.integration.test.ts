@@ -122,8 +122,12 @@ describe('application integration', () => {
 
     expect(health.ready).toBe(true);
     expect(status.mode).toBe('shared');
+    expect(status.totalDownloadedBytes).toBe(7 * 3);
+    expect(status.totalUploadedBytes).toBe(0);
     expect(status.totalUploadRate).toBe(256 * 3);
     expect(status.totalDownloadRate).toBe(0);
+    expect(status.trafficStartedAt).toBeTypeOf('string');
+    expect(status.trafficUpdatedAt).toBeTypeOf('string');
     expect(status.servingPeerCount).toBe(3);
     expect(status.sharedTaskCount).toBeTypeOf('number');
     expect((status.activeTasks as Array<{ localPath: string }>).every((item) => item.localPath.includes(config.cacheDir))).toBe(true);
@@ -148,6 +152,31 @@ describe('application integration', () => {
 
     expect(adapter.downloads).toBe(3);
     expect(restarted.catalog.listEntries().some((entry) => entry.state === 'shared')).toBe(true);
+  });
+
+  it('returns zero-traffic status fields before any transfer and keeps reads side-effect free', async () => {
+    const config = await makeTempConfig({ sources: [] });
+    const uiDistDir = path.join(config.dataDir, 'ui-dist');
+    await fs.mkdir(uiDistDir, { recursive: true });
+    await fs.writeFile(path.join(uiDistDir, 'index.html'), '<!doctype html><html><body><div id="root">ok</div></body></html>', 'utf8');
+
+    const app = createApplication(config, { uiDistDir });
+    cleanupCallbacks.push(async () => {
+      await app.stop().catch(() => undefined);
+      await fs.rm(config.dataDir, { recursive: true, force: true });
+    });
+    await app.start();
+
+    const beforeStatus = JSON.stringify(app.catalog.snapshot());
+    const status = await fetch(`${app.httpServer.getUrl()}/status`).then((response) => response.json() as Promise<Record<string, unknown>>);
+    const afterStatus = JSON.stringify(app.catalog.snapshot());
+
+    expect(status.totalDownloadedBytes).toBe(0);
+    expect(status.totalUploadedBytes).toBe(0);
+    expect(status.trafficStartedAt).toBeTypeOf('string');
+    expect(status.trafficUpdatedAt).toBeTypeOf('string');
+    expect(Array.isArray(status.activeTasks)).toBe(true);
+    expect(beforeStatus).toBe(afterStatus);
   });
 
   it('evaluates cleanup by age and capacity without touching pinned entries', async () => {

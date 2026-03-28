@@ -42,28 +42,144 @@ function makeTarget(hash: string): TargetSelection {
 }
 
 describe('hybrid transfer', () => {
-  it('uses fallback payload and promotes verified cache to shared', async () => {
+  it('counts torrent download and shared upload deltas once', async () => {
     const config = await makeTempConfig();
     const catalog = new CatalogStore(config);
     await catalog.initialize();
     const payload = 'payload';
-    const adapter = new FakeTransferAdapter({ default: payload }, 'fallback', {
+    const adapter = new FakeTransferAdapter({ default: payload }, 'downloading', {
       downloadRate: 0,
       uploadRate: 512,
-      peerCount: 2,
+      peerCount: 3,
+    }, {
+      downloadProgress: [
+        {
+          mode: 'downloading',
+          bytesDone: 3,
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: 3,
+          uploadedBytes: 0,
+          downloadRate: 3,
+          uploadRate: 0,
+          peerCount: 2,
+        },
+        {
+          mode: 'downloading',
+          bytesDone: 3,
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: 3,
+          uploadedBytes: 0,
+          downloadRate: 3,
+          uploadRate: 0,
+          peerCount: 2,
+        },
+        {
+          mode: 'downloading',
+          bytesDone: Buffer.byteLength(payload),
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: Buffer.byteLength(payload),
+          uploadedBytes: 0,
+          downloadRate: 4,
+          uploadRate: 0,
+          peerCount: 2,
+        },
+      ],
+      seedingProgress: [
+        {
+          mode: 'shared',
+          bytesDone: Buffer.byteLength(payload),
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: 0,
+          uploadedBytes: 0,
+          downloadRate: 0,
+          uploadRate: 256,
+          peerCount: 2,
+        },
+        {
+          mode: 'shared',
+          bytesDone: Buffer.byteLength(payload),
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: 0,
+          uploadedBytes: 5,
+          downloadRate: 0,
+          uploadRate: 512,
+          peerCount: 3,
+        },
+        {
+          mode: 'shared',
+          bytesDone: Buffer.byteLength(payload),
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: 0,
+          uploadedBytes: 5,
+          downloadRate: 0,
+          uploadRate: 512,
+          peerCount: 3,
+        },
+      ],
     });
     const transfer = new HybridTransfer(config, catalog, adapter);
 
     const target = makeTarget(sha256(payload));
     await transfer.ensureCached(target);
 
+    const runtime = catalog.snapshot().service;
     const entry = catalog.getEntry(target.id);
     expect(entry?.state).toBe('shared');
     expect(entry?.uploadRate).toBe(512);
-    expect(entry?.peerCount).toBe(2);
+    expect(entry?.peerCount).toBe(3);
+    expect(runtime.totalDownloadedBytes).toBe(Buffer.byteLength(payload));
+    expect(runtime.totalUploadedBytes).toBe(5);
     expect(await fs.readFile(path.join(config.cacheDir, target.asset.relativePath), 'utf8')).toBe(payload);
     expect(adapter.downloads).toBe(1);
     expect(adapter.ensuredSeeds).toContain(target.id);
+  });
+
+  it('counts fallback download deltas without duplicate snapshots', async () => {
+    const config = await makeTempConfig();
+    const catalog = new CatalogStore(config);
+    await catalog.initialize();
+    const payload = 'payload';
+    const adapter = new FakeTransferAdapter({ default: payload }, 'fallback', undefined, {
+      downloadProgress: [
+        {
+          mode: 'fallback',
+          bytesDone: 2,
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: 2,
+          uploadedBytes: 0,
+          downloadRate: 2,
+          uploadRate: 0,
+          peerCount: 0,
+        },
+        {
+          mode: 'fallback',
+          bytesDone: 2,
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: 2,
+          uploadedBytes: 0,
+          downloadRate: 2,
+          uploadRate: 0,
+          peerCount: 0,
+        },
+        {
+          mode: 'fallback',
+          bytesDone: Buffer.byteLength(payload),
+          bytesTotal: Buffer.byteLength(payload),
+          downloadedBytes: Buffer.byteLength(payload),
+          uploadedBytes: 0,
+          downloadRate: 5,
+          uploadRate: 0,
+          peerCount: 0,
+        },
+      ],
+    });
+    const transfer = new HybridTransfer(config, catalog, adapter);
+
+    await transfer.ensureCached(makeTarget(sha256(payload)));
+
+    const runtime = catalog.snapshot().service;
+    expect(runtime.totalDownloadedBytes).toBe(Buffer.byteLength(payload));
+    expect(runtime.totalUploadedBytes).toBe(0);
   });
 
   it('quarantines hash mismatch failures', async () => {
