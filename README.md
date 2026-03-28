@@ -19,8 +19,8 @@
 - Verifies `sha256` before promoting files into cache
 - Persists catalog state in `catalog.json` and restores verified cache on restart
 - Applies cleanup rules by capacity, entry count, retention window, and pinned whitelist
-- Exposes read-only JSON endpoints for health and cache visibility
-- Ships a React dashboard that visualizes service mode, active transfers, targets, cache entries, and diagnostics
+- Exposes read-only JSON endpoints for health, cumulative traffic, and cache visibility
+- Ships a React dashboard that visualizes service mode, active transfers, cumulative traffic, targets, cache entries, and diagnostics
 
 ## Requirements
 
@@ -171,7 +171,7 @@ Returns liveness, readiness, last successful scan time, enabled source count, an
 
 ### `GET /status`
 
-Returns normalized service mode and active task snapshots:
+Returns normalized service mode, current-run cumulative traffic, and active task snapshots:
 
 - `idle`
 - `discovering`
@@ -182,6 +182,13 @@ Returns normalized service mode and active task snapshots:
 - `error`
 
 Each active task may include progress bytes, download rate, upload rate, peer count, and last error.
+
+The top-level payload also includes:
+
+- `totalDownloadedBytes` - cumulative download traffic since the current service run started
+- `totalUploadedBytes` - cumulative upload traffic since the current service run started
+- `trafficStartedAt` - timestamp for the current traffic statistics window
+- `trafficUpdatedAt` - most recent timestamp when traffic totals changed
 
 ### `GET /targets`
 
@@ -205,6 +212,7 @@ The dashboard focuses on:
 
 - service readiness and current mode
 - active transfer throughput and peer count
+- cumulative downloaded/uploaded traffic with the current service-run window
 - planner targets and metadata readiness
 - cache catalog state
 - recent diagnostics and source failures
