@@ -15,9 +15,13 @@ type HealthPayload = {
 type StatusPayload = {
   mode: string;
   startedAt: string;
+  trafficStartedAt: string;
+  trafficUpdatedAt: string;
   lastScanStartedAt: string | null;
   lastScanCompletedAt: string | null;
   lastSuccessfulScanAt: string | null;
+  totalDownloadedBytes: number;
+  totalUploadedBytes: number;
   totalUploadRate: number;
   totalDownloadRate: number;
   servingPeerCount: number;
@@ -315,6 +319,11 @@ export default function App() {
             <StatCard label="Targets" value={String(selectedCount)} detail="In plan" />
             <StatCard label="Cached" value={String(verifiedCount)} detail="Verified" />
             <StatCard label="Upload" value={formatRate(state.status?.totalUploadRate ?? 0)} detail={`Serving ${state.status?.servingPeerCount ?? 0} peers`} />
+            <StatCard label="累计下行" value={formatBytes(state.status?.totalDownloadedBytes ?? 0)} detail="自服务启动以来" />
+            <StatCard label="累计上行" value={formatBytes(state.status?.totalUploadedBytes ?? 0)} detail="自服务启动以来" />
+          </div>
+          <div className="subline">
+            统计窗口 自服务启动以来 · 起于 {formatDate(state.status?.trafficStartedAt ?? state.status?.startedAt)} · 最近流量更新 {formatDate(state.status?.trafficUpdatedAt ?? state.updatedAt)}
           </div>
         </section>
 
