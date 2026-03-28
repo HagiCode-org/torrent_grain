@@ -13,6 +13,11 @@ export interface CatalogState {
   entries: Record<string, CacheEntry>;
 }
 
+interface TrafficCheckpoint {
+  downloadedBytes: number;
+  uploadedBytes: number;
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -48,6 +53,10 @@ function createEmptyState(config: ServiceConfig): CatalogState {
       ready: false,
       mode: 'idle',
       startedAt,
+      trafficStartedAt: startedAt,
+      trafficUpdatedAt: startedAt,
+      totalDownloadedBytes: 0,
+      totalUploadedBytes: 0,
       enabledSourceCount: config.sources.filter((source) => source.enabled).length,
       recentFailures: [],
       diagnostics: [],
@@ -60,6 +69,7 @@ function createEmptyState(config: ServiceConfig): CatalogState {
 export class CatalogStore {
   private state: CatalogState;
   private persistPromise: Promise<void> = Promise.resolve();
+  private trafficCheckpoints = new Map<string, TrafficCheckpoint>();
 
   constructor(private readonly config: ServiceConfig) {
     this.state = createEmptyState(config);
@@ -82,8 +92,13 @@ export class CatalogStore {
     }
 
     const recoveredAt = nowIso();
+    this.trafficCheckpoints.clear();
     this.state.service.live = true;
     this.state.service.catalogRecoveredAt = recoveredAt;
+    this.state.service.trafficStartedAt = recoveredAt;
+    this.state.service.trafficUpdatedAt = recoveredAt;
+    this.state.service.totalDownloadedBytes = 0;
+    this.state.service.totalUploadedBytes = 0;
     this.state.service.enabledSourceCount = this.config.sources.filter((source) => source.enabled).length;
     this.state.service.ready = Boolean(this.state.service.catalogRecoveredAt && this.state.service.lastSuccessfulScanAt);
     this.state.service.mode = deriveServiceMode(this.state.service, this.listEntries());
@@ -222,6 +237,9 @@ export class CatalogStore {
     entry.state = state;
     entry.updatedAt = nowIso();
     delete entry.lastError;
+    if (state === 'verifying') {
+      this.resetTrafficCheckpoint(id);
+    }
     this.state.service.mode = deriveServiceMode(this.state.service, this.listEntries());
     await this.persist();
   }
@@ -230,17 +248,36 @@ export class CatalogStore {
     mode: 'downloading' | 'fallback' | 'shared';
     bytesDone: number;
     bytesTotal: number;
+    downloadedBytes: number;
+    uploadedBytes: number;
     downloadRate: number;
     uploadRate: number;
     peerCount: number;
   }): void {
     const entry = this.requireEntry(id);
+    const stamp = nowIso();
+    const checkpoint = this.trafficCheckpoints.get(id);
+    const downloadBase = checkpoint && progress.downloadedBytes >= checkpoint.downloadedBytes ? checkpoint.downloadedBytes : 0;
+    const uploadBase = checkpoint && progress.uploadedBytes >= checkpoint.uploadedBytes ? checkpoint.uploadedBytes : 0;
+    const downloadedDelta = Math.max(0, progress.downloadedBytes - downloadBase);
+    const uploadedDelta = Math.max(0, progress.uploadedBytes - uploadBase);
+
+    if (downloadedDelta > 0 || uploadedDelta > 0) {
+      this.state.service.totalDownloadedBytes += downloadedDelta;
+      this.state.service.totalUploadedBytes += uploadedDelta;
+      this.state.service.trafficUpdatedAt = stamp;
+    }
+    this.trafficCheckpoints.set(id, {
+      downloadedBytes: progress.downloadedBytes,
+      uploadedBytes: progress.uploadedBytes,
+    });
+
     if (progress.mode === 'shared') {
       entry.state = 'shared';
     } else {
       entry.state = progress.mode === 'fallback' ? 'fallback' : 'downloading';
     }
-    entry.updatedAt = nowIso();
+    entry.updatedAt = stamp;
     entry.bytesDone = progress.bytesDone;
     entry.bytesTotal = progress.bytesTotal;
     entry.downloadRate = progress.downloadRate;
@@ -261,6 +298,8 @@ export class CatalogStore {
     entry.downloadRate = 0;
     entry.uploadRate = 0;
     entry.peerCount = 0;
+    this.resetTrafficCheckpoint(id);
+    this.state.service.mode = deriveServiceMode(this.state.service, this.listEntries());
     await this.persist();
   }
 
@@ -307,6 +346,7 @@ export class CatalogStore {
     entry.uploadRate = 0;
     entry.peerCount = 0;
     entry.diagnostics = [...entry.diagnostics.slice(-9), diagnostic(code, message, stamp)];
+    this.resetTrafficCheckpoint(id);
     this.state.service.mode = deriveServiceMode(this.state.service, this.listEntries());
     await this.persist();
   }
@@ -322,6 +362,7 @@ export class CatalogStore {
     entry.uploadRate = 0;
     entry.peerCount = 0;
     entry.diagnostics = [...entry.diagnostics.slice(-9), diagnostic('cleaned-up', reason, stamp)];
+    this.resetTrafficCheckpoint(id);
     this.state.service.mode = deriveServiceMode(this.state.service, this.listEntries());
     await this.persist();
   }
@@ -333,7 +374,10 @@ export class CatalogStore {
         if (entry.state === 'shared') {
           entry.state = 'verified';
           entry.updatedAt = stamp;
+          entry.uploadRate = 0;
+          entry.peerCount = 0;
           entry.diagnostics = [...entry.diagnostics.slice(-9), diagnostic('sharing-disabled', 'sharing disabled, kept verified cache', stamp)];
+          this.resetTrafficCheckpoint(entry.id);
         }
       }
     }
@@ -347,6 +391,10 @@ export class CatalogStore {
       throw new Error(`Missing catalog entry: ${id}`);
     }
     return entry;
+  }
+
+  private resetTrafficCheckpoint(id: string): void {
+    this.trafficCheckpoints.delete(id);
   }
 
   private async persist(): Promise<void> {

@@ -19,6 +19,8 @@ export interface TransferProgress {
   mode: 'downloading' | 'fallback' | 'shared';
   bytesDone: number;
   bytesTotal: number;
+  downloadedBytes: number;
+  uploadedBytes: number;
   downloadRate: number;
   uploadRate: number;
   peerCount: number;
@@ -87,6 +89,8 @@ export class WebTorrentTransferAdapter implements TransferAdapter {
         mode: 'shared',
         bytesDone: Number(torrent.length ?? 0),
         bytesTotal: Number(torrent.length ?? 0),
+        downloadedBytes: 0,
+        uploadedBytes: Number(torrent.uploaded ?? 0),
         downloadRate: Number(torrent.downloadSpeed ?? 0),
         uploadRate: Number(torrent.uploadSpeed ?? 0),
         peerCount: Number(torrent.numPeers ?? 0),
@@ -181,6 +185,8 @@ export class WebTorrentTransferAdapter implements TransferAdapter {
           mode: hasPeer ? 'downloading' : hasWebSeed ? 'fallback' : 'downloading',
           bytesDone: current,
           bytesTotal: total,
+          downloadedBytes: current,
+          uploadedBytes: Number(torrent.uploaded ?? 0),
           downloadRate: Number(torrent.downloadSpeed ?? 0),
           uploadRate: Number(torrent.uploadSpeed ?? 0),
           peerCount: Number(torrent.numPeers ?? 0),
@@ -257,6 +263,8 @@ export class WebTorrentTransferAdapter implements TransferAdapter {
         mode: 'fallback',
         bytesDone,
         bytesTotal: total,
+        downloadedBytes: bytesDone,
+        uploadedBytes: 0,
         downloadRate: Math.round(bytesDone / elapsedSeconds),
         uploadRate: 0,
         peerCount: 0,

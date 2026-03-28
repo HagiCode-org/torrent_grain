@@ -13,6 +13,10 @@ export interface ServiceRuntimeState {
   ready: boolean;
   mode: ServiceMode;
   startedAt: string;
+  trafficStartedAt: string;
+  trafficUpdatedAt: string;
+  totalDownloadedBytes: number;
+  totalUploadedBytes: number;
   catalogRecoveredAt?: string;
   lastScanStartedAt?: string;
   lastScanCompletedAt?: string;

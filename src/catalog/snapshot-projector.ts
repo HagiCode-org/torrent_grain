@@ -45,9 +45,13 @@ export class SnapshotProjector {
     return {
       mode: state.service.mode,
       startedAt: state.service.startedAt,
+      trafficStartedAt: state.service.trafficStartedAt,
+      trafficUpdatedAt: state.service.trafficUpdatedAt,
       lastScanStartedAt: state.service.lastScanStartedAt ?? null,
       lastScanCompletedAt: state.service.lastScanCompletedAt ?? null,
       lastSuccessfulScanAt: state.service.lastSuccessfulScanAt ?? null,
+      totalDownloadedBytes: state.service.totalDownloadedBytes,
+      totalUploadedBytes: state.service.totalUploadedBytes,
       totalUploadRate,
       totalDownloadRate,
       servingPeerCount,
