@@ -1,4 +1,4 @@
-ARG NODE_IMAGE=node:24
+ARG NODE_IMAGE=node:22
 
 FROM ${NODE_IMAGE} AS base
 WORKDIR /app
